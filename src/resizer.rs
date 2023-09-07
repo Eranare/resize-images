@@ -28,7 +28,9 @@ pub fn resize_images(input_folder: &str, output_folder: &str, target_width: u32,
                     let crop_x = (width as f64 - crop_width) / 2.0;
                     let crop_y = (height as f64 - crop_height) / 2.0;
             
-                    img.crop_imm(crop_x as u32, crop_y as u32, crop_width as u32, crop_height as u32)
+                    img.crop_imm(crop_x as u32, crop_y as u32, crop_width as u32, crop_height as u32);
+                    let cropped_img = img.crop_imm(crop_x as u32, crop_y as u32, crop_width as u32, crop_height as u32);
+                    cropped_img.resize(target_width, target_height, image::imageops::FilterType::Lanczos3)
                 },
                 ResizeMode::Pad => {
                     let (width, height) = img.dimensions();
