@@ -17,6 +17,14 @@ struct AppState {
     output_folder: String,
     include_subfolders: bool,
     progress: f64,
+    resize_mode: ResizeMode,
+}
+
+#[derive(Clone, Data, PartialEq)]
+pub enum ResizeMode {
+    Crop,
+    Pad,
+    Default,
 }
 
 fn build_ui() -> impl Widget<AppState> {
@@ -34,9 +42,20 @@ fn build_ui() -> impl Widget<AppState> {
         data.output_folder = gui_helpers::choose_folder().unwrap_or_default();
     });
 
+    use druid::widget::RadioGroup;
+
+    let resize_mode_group = RadioGroup::new(vec![
+        ("Default", ResizeMode::Default),
+        ("Crop", ResizeMode::Crop),
+        ("Pad", ResizeMode::Pad),
+    ]).lens(AppState::resize_mode);
+
+    col.add_flex_child(resize_mode_group, 1.0);
+
+
     let start_button = Button::new("Start").on_click(|_, data: &mut AppState, _| {
         let total_images = count_images_in_directory(&data.input_folder, data.include_subfolders);
-        resize_images(&data.input_folder, &data.output_folder, 256, 256, &mut data.progress, total_images);
+        resize_images(&data.input_folder, &data.output_folder, 256, 256, &mut data.progress, total_images, data.resize_mode.clone());
     });
 
     let progress_bar = ProgressBar::new().lens(AppState::progress);
@@ -57,6 +76,7 @@ fn main() {
         output_folder: String::new(),
         include_subfolders: false,
         progress: 0.0,
+        resize_mode: ResizeMode::Default,
     };
     AppLauncher::with_window(main_window)
         .launch(state)
