@@ -2,65 +2,83 @@
 
 extern crate image;
 extern crate native_dialog;
-extern crate gtk;
 
-use gtk::prelude::*;
-use gtk::{Window, WindowType,CheckButton, Button, Box, ProgressBar, Orientation};
-use std::sync::{Arc, Mutex};
-
+use druid::widget::{Button, Flex, Checkbox, ProgressBar};
+use druid::{AppLauncher, Widget, WindowDesc, Data, Lens, WidgetExt};
 
 // Import the resize_images function from the resizer module
-
 use crate::resizer::{resize_images, count_images_in_directory};
 mod resizer;
 mod gui_helpers;
 
+#[derive(Clone, Data, Lens)]
+struct AppState {
+    input_folder: String,
+    output_folder: String,
+    include_subfolders: bool,
+    progress: f64,
+    resize_mode: ResizeMode,
+}
+
+#[derive(Clone, Data, PartialEq)]
+pub enum ResizeMode {
+    Crop,
+    Pad,
+    Default,
+}
+
+fn build_ui() -> impl Widget<AppState> {
+    // Create a vertical layout
+    let mut col = Flex::column();
+
+    // Add components to the layout
+    let choose_input_button = Button::new("Choose Input Folder").on_click(|_, data: &mut AppState, _| {
+        data.input_folder = gui_helpers::choose_folder().unwrap_or_default();
+    });
+
+    let include_subfolders_check = Checkbox::new("Include Subfolders").lens(AppState::include_subfolders);
+
+    let choose_output_button = Button::new("Choose Output Folder").on_click(|_, data: &mut AppState, _| {
+        data.output_folder = gui_helpers::choose_folder().unwrap_or_default();
+    });
+
+    use druid::widget::RadioGroup;
+
+    let resize_mode_group = RadioGroup::new(vec![
+        ("Default", ResizeMode::Default),
+        ("Crop", ResizeMode::Crop),
+        ("Pad", ResizeMode::Pad),
+    ]).lens(AppState::resize_mode);
+
+    col.add_flex_child(resize_mode_group, 1.0);
+
+
+    let start_button = Button::new("Start").on_click(|_, data: &mut AppState, _| {
+        let total_images = count_images_in_directory(&data.input_folder, data.include_subfolders);
+        resize_images(&data.input_folder, &data.output_folder, 256, 256, &mut data.progress, total_images, data.resize_mode.clone());
+    });
+
+    let progress_bar = ProgressBar::new().lens(AppState::progress);
+
+    col.add_flex_child(choose_input_button, 1.0);
+    col.add_flex_child(include_subfolders_check, 1.0);
+    col.add_flex_child(choose_output_button, 1.0);
+    col.add_flex_child(progress_bar, 1.0);
+    col.add_flex_child(start_button, 1.0);
+
+    col
+}
+
 fn main() {
-    gtk::init().expect("Failed to initialize GTK.");
-
-    let window = Window::new(WindowType::Toplevel);
-    window.set_title("Image Resizer");
-    window.set_default_size(300, 100);
-
-    let vbox = Box::new(Orientation::Vertical, 5);
-    let hbox = Box::new(Orientation::Horizontal, 5);
-    let choose_input_button = Button::new_with_label("Choose Input Folder");
-    let include_subfolders_check = CheckButton::new_with_label("Include Subfolders");
-    let choose_output_button = Button::new_with_label("Choose Output Folder");
-    let start_button = Button::new_with_label("Start");
-    let progress_bar = ProgressBar::new();
-
-    hbox.pack_start(&choose_input_button, true, true, 0);
-    hbox.pack_start(&include_subfolders_check, false, false, 0);
-    hbox.pack_start(&choose_output_button, true, true, 0);
-    hbox.pack_start(&progress_bar, true, true, 0);
-    hbox.pack_start(&start_button, true, true, 0);
-    vbox.pack_start(&hbox, true, true, 0);
-    window.add(&vbox);
-
-    let input_folder = Arc::new(Mutex::new(String::new()));
-    let output_folder = Arc::new(Mutex::new(String::new()));
-    let progress = Arc::new(Mutex::new(progress_bar.clone()));
-    
-    choose_input_button.connect_clicked(move |_| {
-        let mut input_folder_lock = input_folder.lock().unwrap();
-        *input_folder_lock = gui_helpers::choose_folder().expect("User did not choose an input folder");
-    });
-    
-    choose_output_button.connect_clicked(move |_| {
-        let mut output_folder_lock = output_folder.lock().unwrap();
-        *output_folder_lock = gui_helpers::choose_folder().expect("User did not choose an output folder");
-    });
-    
-    start_button.connect_clicked(move |_| {
-        let input = input_folder.lock().unwrap().clone();
-        let output = output_folder.lock().unwrap().clone();
-        let include_subfolders = include_subfolders_check.get_active();
-        let total_images = count_images_in_directory(&input, include_subfolders);
-        resize_images(&input, &output, 256, 256, progress.clone(), total_images);
-    });
-    
-
-    window.show_all();
-    gtk::main();
+    let main_window = WindowDesc::new(build_ui).title("Image Resizer");
+    let state = AppState {
+        input_folder: String::new(),
+        output_folder: String::new(),
+        include_subfolders: false,
+        progress: 0.0,
+        resize_mode: ResizeMode::Default,
+    };
+    AppLauncher::with_window(main_window)
+        .launch(state)
+        .expect("Failed to launch application");
 }
